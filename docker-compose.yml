@@ -1,18 +1,18 @@
 version: '3.8'
 services:
   grafana:
-    image: simpledotorg/heart360tk-grafana:main.4
+    image: simpledotorg/heart360tk-grafana:main.8
     container_name: grafana
     ports:
       - 3000:3000
     restart: unless-stopped
     environment:
       - GF_TIME_PICKER_QUICK_RANGES=[{"from":"now-6M","to":"now","display":"Last 6 months"},{"from":"now-1y","to":"now","display":"Last year"},{"from":"now-2y","to":"now","display":"Last 2 years"},{"from":"now-5y","to":"now","display":"Last 5 years"}]
-      - GF_DATABASE_URL=postgres://grafana_user:your_db_password@postgres:5432/metrics_db
-      - GF_SECURITY_ADMIN_PASSWORD=your_db_password
+      - GF_DATABASE_URL=postgres://grafana:your_secure_password@postgres:5432/metrics_db
+      - GF_SECURITY_ADMIN_PASSWORD=your_secure_password
 
   postgres:
-    image: simpledotorg/heart360tk-postgresql:main.4
+    image: simpledotorg/heart360tk-postgresql:main.8
     container_name: postgres
     ports:
       - 5432:5432
@@ -21,9 +21,8 @@ services:
       - POSTGRES_USER=grafana_user
       - POSTGRES_PASSWORD=your_db_password
       - POSTGRES_DB=metrics_db
-    #volumes:
-    #  - ./pg_init_scripts:/docker-entrypoint-initdb.d:ro
-    #  - ./data:/var/lib/postgresql/import:ro
+    volumes:
+      - ./.database:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready", "-d", "db_prod"]
       interval: 30s
