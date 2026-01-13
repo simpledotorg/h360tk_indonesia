@@ -19,7 +19,7 @@ services:
       - 5432:5432
     restart: unless-stopped
     environment:
-    ## TODO: change this & move some to image
+    ## TODO: change this & move some to image & take from .env
       - POSTGRES_USER=grafana_user
       - POSTGRES_PASSWORD=your_db_password
       - POSTGRES_DB=metrics_db
@@ -39,21 +39,22 @@ services:
     container_name: file-upload-trigger
    # entrypoint: /bin/sh /scripts/init.sh
     environment:
-      - INOTIFY_TARGET=/data
-      - INOTIFY_SCRIPT=/scripts/fileproc.sh
+      - H360TK_DATA_LOAD_SCRIPT=/scripts/ingest_file_puskesmas.py
       - POSTGRES_HOST=postgres
       - POSTGRES_USER=grafana_user
       - POSTGRES_PASSWORD=your_db_password
       - POSTGRES_DB=metrics_db
     volumes:
+      - ./ingest_file_puskesmas.py:/scripts/ingest_file_puskesmas.py
       - .upload:/data:rw
       
 
 
 ###
-# For now, still taken from the base
+# For now, still taken from the base image
 ###
-# TODO: have configuration (like users) dumped out of the container
+# TODO: have configuration (like users) dumped out of the container, to avoid losing it
+# when reinstalling
   filebrowser:
     image: gtstef/filebrowser:stable-slim
     container_name: filebrowser-quantum
