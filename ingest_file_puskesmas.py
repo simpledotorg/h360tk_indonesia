@@ -127,7 +127,7 @@ def generate_sql_insert_statement(record: Dict[str, Any], facility: str, region:
 
 
     sql_call = f"""
-SELECT public.insert_heart360_data(
+SELECT insert_heart360_data(
     p_patient_id => {patient_id_sql},
     p_patient_name => {to_sql_literal(record.get('nama_pasien'))},
     p_gender => {to_sql_literal(record.get('jenis_kelamin'))},
