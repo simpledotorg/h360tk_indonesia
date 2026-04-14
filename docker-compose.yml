@@ -54,3 +54,18 @@ services:
       - FILEBROWSER_ADMIN_PASSWORD=admin
       - FILEBROWSER_BASEURL=/
 
+  pgadmin:
+    image: simpledotorg/heart360tk-pgadmin:${HEART360TK_VERSION}
+    container_name: pgadmin
+    ports:
+      - "5050:80"
+    restart: unless-stopped
+    user: root
+    entrypoint: /bin/sh -c "cp /pgadmin4/pgpass_src /tmp/pgpass && chmod 0600 /tmp/pgpass && chown 5050:5050 /tmp/pgpass && /entrypoint.sh"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+
+volumes:
+  pgadmin_data:
