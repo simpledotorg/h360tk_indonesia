@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       - GF_DATABASE_URL=postgres://grafana:ZDI5MGE3YmYyMTRlNGNmYThkMTYyZjk3@postgres:5432/${POSTGRES_DB}
-      - GF_SECURITY_ADMIN_PASSWORD=your_secure_password
+      - GF_SECURITY_ADMIN_PASSWORD=Admin@Heart360
 
   postgres:
     image: simpledotorg/heart360tk-postgresql:${HEART360TK_VERSION}
