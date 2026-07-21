@@ -12,7 +12,5 @@ to upload file:
 
 http://localhost:8080/
 
----
-
-# HEARTS360 Toolkit for Indonesia
+**Note:** We recommend using **CSV** files for data import, as they provide faster ingestion. **Excel (.xlsx)** files are also supported but may take longer to process.
 
