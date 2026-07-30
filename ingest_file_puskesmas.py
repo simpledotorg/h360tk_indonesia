@@ -23,6 +23,13 @@ FINAL_COLUMN_WHITELIST = [
     'jenis_kelamin',
     'wilayah',
     'kecamatan',
+    'diagnosis_1',
+    'diagnosis_2',
+    'icd_x_1',
+    'icd_x_2',
+    'icd_x_3',
+    'icd_x_4',
+    'icd_x_5',
 ]
 # ---------------------------------
 
@@ -48,8 +55,17 @@ SP_REGION_VALUE = 'Demo'
 
 # --- ALLOWED DIAGNOSIS CODES ---
 ALLOWED_DIAGNOSIS_CODES = {'I10', 'E11'}
-COL_DIAGNOSIS_1 = 'diagnosis_1'
-COL_DIAGNOSIS_2 = 'diagnosis_2'
+# Normalized names of every column that may carry an ICD code. Subcodes such as
+# E11.8 are deliberately not matched; only exact codes count.
+DIAGNOSIS_COLUMNS = [
+    'diagnosis_1',
+    'diagnosis_2',
+    'icd_x_1',
+    'icd_x_2',
+    'icd_x_3',
+    'icd_x_4',
+    'icd_x_5',
+]
 # ----------------------------------------------------------------
 
 # --- HIERARCHY CONFIGURATION ---
@@ -98,6 +114,18 @@ def safe_str(value):
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
     return str(value)
+
+def collect_diagnosis_codes(record):
+    """Return the allowed diagnosis codes present in any diagnosis column."""
+    codes = set()
+    for col in DIAGNOSIS_COLUMNS:
+        value = record.get(col)
+        if value is None or not pd.notna(value):
+            continue
+        code = str(value).strip().upper()
+        if code in ALLOWED_DIAGNOSIS_CODES:
+            codes.add(code)
+    return codes
 
 def to_sql_literal(value, target_type=None):
     if value is None or (isinstance(value, float) and pd.isna(value)):
@@ -339,6 +367,16 @@ def ingest_and_execute(file_path):
     print(f"Columns found: {list(df_data.columns)}", file=sys.stderr)
     print(f"Total rows: {len(df_data)}", file=sys.stderr)
 
+    diagnosis_columns_present = [c for c in DIAGNOSIS_COLUMNS if c in df_data.columns]
+    if diagnosis_columns_present:
+        print(f"Diagnosis columns used: {diagnosis_columns_present}", file=sys.stderr)
+    else:
+        print(
+            f"Warning: none of the expected diagnosis columns {DIAGNOSIS_COLUMNS} are "
+            f"present; no diagnoses will be recorded.",
+            file=sys.stderr,
+        )
+
     # Build hierarchy using metadata facility for level 3 (PHC)
     # Levels 1 and 2 use defaults since current Excel only has Puskesmas
     hierarchy = []
@@ -421,16 +459,7 @@ def ingest_and_execute(file_path):
                 execute_upsert_patient(cur, patient_id_sql, flat_record, registration_date_parsed, birth_date_parsed, org_unit_id)
 
                 # 2. Insert diagnoses
-                diagnosis_1 = str(flat_record.get(COL_DIAGNOSIS_1)).strip().upper() if pd.notna(flat_record.get(COL_DIAGNOSIS_1)) and str(flat_record.get(COL_DIAGNOSIS_1)).strip() else None
-                diagnosis_2 = str(flat_record.get(COL_DIAGNOSIS_2)).strip().upper() if pd.notna(flat_record.get(COL_DIAGNOSIS_2)) and str(flat_record.get(COL_DIAGNOSIS_2)).strip() else None
-
-                diagnoses = set()
-                if diagnosis_1:
-                    diagnoses.add(diagnosis_1)
-                if diagnosis_2:
-                    diagnoses.add(diagnosis_2)
-
-                for diagnosis_code in diagnoses:
+                for diagnosis_code in sorted(collect_diagnosis_codes(flat_record)):
                     execute_insert_diagnosis(cur, patient_id_sql, diagnosis_code)
 
                 # 3. Create encounter + BP
