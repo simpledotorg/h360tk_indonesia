@@ -20,13 +20,21 @@ FINAL_COLUMN_WHITELIST = [
     'tgl_lahir',
     'tanggal',
     'no_telp',
-    'jenis_kelamin'
-
+    'jenis_kelamin',
+    'wilayah',
+    'kecamatan',
 ]
 # ---------------------------------
 
 # Define the date formats for parsing and output
-DATE_FORMAT_IN = "%d-%m-%Y"
+CSV_DATE_FORMATS = [
+    "%Y-%m-%d",
+    "%d-%m-%Y",
+    "%d/%m/%y",
+    "%d-%m-%Y %H:%M:%S",
+    "%Y-%m-%d %H:%M:%S",
+    "%d/%m/%y %H:%M:%S",
+]
 DATE_FORMAT_OUT = "%Y-%m-%d"
 
 # --- DATABASE CONNECTION DETAILS ---
@@ -37,24 +45,19 @@ DB_CONNECTION_PARAMS = {
     'password': os.getenv('POSTGRES_PASSWORD', 'your_db_password'),
 }
 SP_REGION_VALUE = 'Demo'
+
+# --- ALLOWED DIAGNOSIS CODES ---
+ALLOWED_DIAGNOSIS_CODES = {'I10', 'E11'}
+COL_DIAGNOSIS_1 = 'diagnosis_1'
+COL_DIAGNOSIS_2 = 'diagnosis_2'
 # ----------------------------------------------------------------
 
 # --- HIERARCHY CONFIGURATION ---
-# Level 1 (Region) and Level 2 (District) use default values since the
-# current Excel format only provides Puskesmas (PHC) from metadata.
-# Level 3 (Facility) is populated from the Puskesmas metadata field.
-#
-# Fields:
-#   level        - integer depth (1 = top)
-#   column       - Excel column name(s) to read (first match wins)
-#   display_name - label for readability only
-#   var_name     - Levels 1-5 use fixed names (region, district, phc, shc, village)
-#   default      - fallback value when column is empty (None = skip level)
-
 HIERARCHY_LEVELS = [
-    {'level': 1, 'column': [],            'display_name': 'Region',   'var_name': 'region',   'default': SP_REGION_VALUE},
-    {'level': 2, 'column': [],            'display_name': 'District', 'var_name': 'district', 'default': SP_REGION_VALUE},
-    {'level': 3, 'column': ['puskesmas'], 'display_name': 'Facility', 'var_name': 'facility', 'default': 'UNKNOWN'},
+    {'level': 1, 'column': ['wilayah'],                       'display_name': 'Region',       'var_name': 'region',       'default': SP_REGION_VALUE},
+    {'level': 2, 'column': ['kecamatan'],                     'display_name': 'District',     'var_name': 'district',     'default': SP_REGION_VALUE},
+    {'level': 3, 'column': ['puskesmas'],                     'display_name': 'Facility',     'var_name': 'facility',     'default': 'UNKNOWN'},
+    {'level': 4, 'column': ['sub_fasilitas', 'sub-facility'], 'display_name': 'Sub-Facility', 'var_name': 'sub_facility', 'default': None},
 ]
 # ----------------------------------------------------------------
 
@@ -76,19 +79,15 @@ def parse_date_field(value):
         return None
     if isinstance(value, (datetime, pd.Timestamp)):
         return value
-    if isinstance(value, str):
-        value = value.strip()
-        if not value or value.lower() == 'nan':
-            return None
+    value = str(value).strip()
+    if not value or value.lower() == 'nan':
+        return None
+    for fmt in CSV_DATE_FORMATS:
         try:
-            return datetime.strptime(value, DATE_FORMAT_IN)
-        except ValueError:
-            pass
-        try:
-            parsed = pd.to_datetime(value)
-            return parsed.to_pydatetime() if hasattr(parsed, 'to_pydatetime') else parsed
+            return datetime.strptime(value, fmt)
         except (ValueError, TypeError):
-            return None
+            continue
+    # Last resort: pandas flexible parser
     try:
         parsed = pd.to_datetime(value)
         return parsed.to_pydatetime() if hasattr(parsed, 'to_pydatetime') else parsed
@@ -159,9 +158,9 @@ def get_metadata_from_excel(file_path):
         if tanggal_value and ' - ' in tanggal_value:
             try:
                 start_date_str, end_date_str = [d.strip() for d in tanggal_value.split(' - ')]
-                start_date_dt = datetime.strptime(start_date_str, DATE_FORMAT_IN)
+                start_date_dt = datetime.strptime(start_date_str, CSV_DATE_FORMATS[1])
                 metadata['dump_start_date'] = start_date_dt.strftime(DATE_FORMAT_OUT)
-                end_date_dt = datetime.strptime(end_date_str, DATE_FORMAT_IN)
+                end_date_dt = datetime.strptime(end_date_str, CSV_DATE_FORMATS[1])
                 metadata['dump_end_date'] = end_date_dt.strftime(DATE_FORMAT_OUT)
             except ValueError:
                 metadata['dump_start_date'] = None
@@ -171,6 +170,50 @@ def get_metadata_from_excel(file_path):
             metadata['dump_end_date'] = None
 
     return metadata
+
+# --- HIERARCHY HELPER FUNCTIONS ---
+
+def build_hierarchy_from_row(row, metadata_facility=None):
+    """Build (name, level) tuples for upsert_org_unit_chain."""
+    hierarchy = []
+    for hlvl in HIERARCHY_LEVELS:
+        value = None
+        for col in hlvl['column']:
+            raw = row.get(col)
+            if raw is not None and not (isinstance(raw, float) and pd.isna(raw)):
+                value = str(raw).strip() or None
+                if value:
+                    break
+        if not value:
+            if hlvl['level'] == 3 and metadata_facility:
+                value = metadata_facility
+            else:
+                value = hlvl.get('default')
+        if value:
+            hierarchy.append((value, hlvl['level']))
+    return hierarchy
+
+def sync_hierarchy_config(cur):
+    """Upsert hierarchy_config from HIERARCHY_LEVELS when the table exists."""
+    try:
+        for hlvl in HIERARCHY_LEVELS:
+            cur.execute(
+                """
+                INSERT INTO hierarchy_config (level, display_name, var_name)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (level) DO UPDATE
+                    SET display_name = EXCLUDED.display_name,
+                        var_name     = EXCLUDED.var_name
+                """,
+                (hlvl['level'], hlvl['display_name'], hlvl['var_name']),
+            )
+    except psycopg2.Error as e:
+        if getattr(e, 'pgcode', None) != '42P01':  # UNDEFINED_TABLE
+            raise
+        print(
+            'Warning: hierarchy_config not in this database; skipped metadata sync.',
+            file=sys.stderr,
+        )
 
 # --- DATABASE HELPER FUNCTIONS ---
 
@@ -229,6 +272,17 @@ INSERT INTO blood_pressures (encounter_id, systolic_bp, diastolic_bp)
 VALUES ({encounter_id}, {to_sql_literal(systolic, target_type='NUMERIC')}, {to_sql_literal(diastolic, target_type='NUMERIC')})
 ON CONFLICT (encounter_id) DO UPDATE SET
     systolic_bp = EXCLUDED.systolic_bp, diastolic_bp = EXCLUDED.diastolic_bp;
+"""
+    cur.execute(sql)
+
+def execute_insert_diagnosis(cur, patient_id_sql, diagnosis_code):
+    """Insert a diagnosis tag for a patient."""
+    if diagnosis_code not in ALLOWED_DIAGNOSIS_CODES:
+        return
+    sql = f"""
+INSERT INTO patient_diagnoses (patient_id, diagnosis_code)
+VALUES ({patient_id_sql}, {to_sql_literal(diagnosis_code)})
+ON CONFLICT (patient_id, diagnosis_code) DO NOTHING;
 """
     cur.execute(sql)
 
@@ -309,18 +363,8 @@ def ingest_and_execute(file_path):
         conn.autocommit = True
         cur = conn.cursor()
 
-        # Auto-sync hierarchy_config from HIERARCHY_LEVELS
-        for hlvl in HIERARCHY_LEVELS:
-            cur.execute("""
-                INSERT INTO hierarchy_config (level, display_name, var_name)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (level) DO UPDATE
-                    SET display_name = EXCLUDED.display_name,
-                        var_name     = EXCLUDED.var_name
-            """, (hlvl['level'], hlvl['display_name'], hlvl['var_name']))
-
-        # Upsert org_unit hierarchy chain once (same for all rows in this file)
-        org_unit_id = execute_upsert_org_unit_chain(cur, hierarchy)
+        # Auto-sync hierarchy_config metadata
+        sync_hierarchy_config(cur)
 
         # 3. Process each row
         for record in df_data.to_dict('records'):
@@ -331,6 +375,10 @@ def ingest_and_execute(file_path):
                  continue
 
             flat_record = record
+
+            # Build row-specific hierarchy
+            row_hierarchy = build_hierarchy_from_row(flat_record, metadata_facility=facility)
+            org_unit_id = execute_upsert_org_unit_chain(cur, row_hierarchy)
 
             # Parse date fields
             birth_date_parsed = parse_date_field(flat_record.get('tgl_lahir'))
@@ -369,10 +417,23 @@ def ingest_and_execute(file_path):
                     print(f"Skipping record #{total_processed} due to NULL patient_id (nik)", file=sys.stderr)
                     continue
 
-                # 1. Upsert patient (always — even without BP data)
+                # 1. Upsert patient
                 execute_upsert_patient(cur, patient_id_sql, flat_record, registration_date_parsed, birth_date_parsed, org_unit_id)
 
-                # 2. Create encounter + BP only if BP values are present
+                # 2. Insert diagnoses
+                diagnosis_1 = str(flat_record.get(COL_DIAGNOSIS_1)).strip().upper() if pd.notna(flat_record.get(COL_DIAGNOSIS_1)) and str(flat_record.get(COL_DIAGNOSIS_1)).strip() else None
+                diagnosis_2 = str(flat_record.get(COL_DIAGNOSIS_2)).strip().upper() if pd.notna(flat_record.get(COL_DIAGNOSIS_2)) and str(flat_record.get(COL_DIAGNOSIS_2)).strip() else None
+
+                diagnoses = set()
+                if diagnosis_1:
+                    diagnoses.add(diagnosis_1)
+                if diagnosis_2:
+                    diagnoses.add(diagnosis_2)
+
+                for diagnosis_code in diagnoses:
+                    execute_insert_diagnosis(cur, patient_id_sql, diagnosis_code)
+
+                # 3. Create encounter + BP
                 if has_bp:
                     enc_id = execute_insert_encounter(cur, patient_id_sql, encounter_datetime_parsed, org_unit_id)
                     execute_insert_bp(cur, enc_id, flat_record.get('sistole'), flat_record.get('diastole'))
