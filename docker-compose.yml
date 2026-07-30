@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       - GF_DATABASE_URL=postgres://grafana:ZDI5MGE3YmYyMTRlNGNmYThkMTYyZjk3@postgres:5432/${POSTGRES_DB}
-      - GF_SECURITY_ADMIN_PASSWORD=your_secure_password
+      - GF_SECURITY_ADMIN_PASSWORD=Admin@Heart360
 
   postgres:
     image: simpledotorg/heart360tk-postgresql:${HEART360TK_VERSION}
@@ -30,8 +30,8 @@ services:
     environment:
       - H360TK_DATA_LOAD_SCRIPT=/scripts/ingest_file_puskesmas.py
       - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_USER=heart360tk
-      - POSTGRES_PASSWORD=YmE4ZTk0OGI0OTNmNGU5YmFjZDY1YTA0
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - ./ingest_file_puskesmas.py:/scripts/ingest_file_puskesmas.py
@@ -54,18 +54,32 @@ services:
       - FILEBROWSER_ADMIN_PASSWORD=admin
       - FILEBROWSER_BASEURL=/
 
-  pgadmin:
-    image: simpledotorg/heart360tk-pgadmin:${HEART360TK_VERSION}
-    container_name: pgadmin
-    ports:
-      - "5050:80"
+  exporter:
+    image: simpledotorg/heart360tk-exporter:${HEART360TK_VERSION}
+    container_name: h360tk-exporter
     restart: unless-stopped
-    user: root
-    entrypoint: /bin/sh -c "cp /pgadmin4/pgpass_src /tmp/pgpass && chmod 0600 /tmp/pgpass && chown 5050:5050 /tmp/pgpass && /entrypoint.sh"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
     depends_on:
       - postgres
-
-volumes:
-  pgadmin_data:
+    environment:
+      - SOURCE_KEY=${SOURCE_KEY}
+      - EXPORT_CRON=${EXPORT_CRON}
+      - UPLOAD_PROTOCOL=${UPLOAD_PROTOCOL}
+      - UPLOAD_DEST_PATH=${UPLOAD_DEST_PATH}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - S3_BUCKET=${S3_BUCKET:-}
+      - S3_KEY_PREFIX=${S3_KEY_PREFIX:-}
+      - S3_REGION=${S3_REGION:-}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
+      - SFTP_HOST=${SFTP_HOST:-}
+      - SFTP_PORT=${SFTP_PORT:-}
+      - SFTP_USER=${SFTP_USER:-}
+      - SFTP_PASSWORD=${SFTP_PASSWORD:-}
+      - SFTP_DEST_PATH=${SFTP_DEST_PATH:-}
+      - SFTP_TIMEOUT=${SFTP_TIMEOUT:-60}
+    volumes:
+      - ./export:/export:rw
