@@ -16,7 +16,7 @@ services:
       - 5432:5432
     restart: unless-stopped
     volumes:
-      - ./.database:/var/lib/postgresql/data
+      - h360tk_database:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready", "-d", "db_prod"]
       interval: 5s
@@ -61,14 +61,14 @@ services:
     depends_on:
       - postgres
     environment:
-      - SOURCE_KEY=${SOURCE_KEY}
-      - EXPORT_CRON=${EXPORT_CRON}
-      - UPLOAD_PROTOCOL=${UPLOAD_PROTOCOL}
-      - UPLOAD_DEST_PATH=${UPLOAD_DEST_PATH}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - SOURCE_KEY=${SOURCE_KEY:-}
+      - EXPORT_CRON=${EXPORT_CRON:-}
+      - UPLOAD_PROTOCOL=${UPLOAD_PROTOCOL:-}
+      - UPLOAD_DEST_PATH=${UPLOAD_DEST_PATH:-}
+      - POSTGRES_HOST=${POSTGRES_HOST:-}
+      - POSTGRES_DB=${POSTGRES_DB:-}
+      - POSTGRES_USER=${POSTGRES_USER}:-
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
       - S3_BUCKET=${S3_BUCKET:-}
       - S3_KEY_PREFIX=${S3_KEY_PREFIX:-}
       - S3_REGION=${S3_REGION:-}
@@ -83,3 +83,50 @@ services:
       - SFTP_TIMEOUT=${SFTP_TIMEOUT:-60}
     volumes:
       - ./export:/export:rw
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - node-exporter
+      - grafana
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+
+volumes:
+  prometheus_data:
+  h360tk_database:
+
