@@ -1,0 +1,27 @@
+dinas-kesehatan-kota-yogyakarta:
+  mappings:
+    - sourceOrgUnitId: "281"
+      targetOrgUnitId: 1
+      targetOrgUnitHierarchy:
+        - "Daerah Istimewa Yogyakarta"
+
+sisfomedika_:
+  mappings:
+    - sourceOrgUnitId: "1"
+      targetOrgUnitId: 1
+      targetOrgUnitHierarchy:
+        - "Daerah Istimewa Yogyakarta"
+
+jcare:
+  mappings:
+    - sourceOrgUnitId: "1"
+      targetOrgUnitId: 687448
+      targetOrgUnitHierarchy:
+        - "Daerah Istimewa Yogyakarta"
+
+simpus-semarang:
+  mappings:
+    - sourceOrgUnitId: "1"
+      targetOrgUnitId: 960513
+      targetOrgUnitHierarchy:
+        - "Jawa Tengah"

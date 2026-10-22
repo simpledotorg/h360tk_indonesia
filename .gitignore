@@ -1,3 +1,11 @@
-.database
-.DS_Store
-.upload
+.env
+.env.*
+!.env.example
+.database/
+data/
+sftp_config/users.conf
+sftp_config/host_keys/
+backups/
+__pycache__/
+*.pyc
+.venv/

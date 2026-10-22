@@ -1,0 +1,4 @@
+FROM simpledotorg/heart360tk-importer@sha256:a7feb2cbe389da90da74d77a9009914b4bf973e6e595d0e203cb2b7dec92c327
+
+COPY --chown=importeruser:importeruser importer_scripts/importer.py /importer/importer.py
+COPY --chown=importeruser:importeruser importer_scripts/import_versions/base.py /importer/import_versions/base.py

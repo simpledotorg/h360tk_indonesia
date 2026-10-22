@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+!.env.example
+.venv
+venv
+.database
+data
+sftp_config/users.conf
+sftp_config/host_keys
+backups
+**/__pycache__
