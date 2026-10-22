@@ -43,7 +43,7 @@ services:
 # TODO: have configuration (like users) dumped out of the container, to avoid losing it
 # when reinstalling
   filebrowser:
-    image: gtstef/filebrowser:stable-slim
+    image: gtstef/filebrowser:1.5.8-stable-slim
     container_name: filebrowser-quantum
     restart: unless-stopped
     ports:
