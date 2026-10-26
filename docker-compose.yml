@@ -6,14 +6,12 @@ services:
       - 3000:3000
     restart: unless-stopped
     environment:
-      - GF_DATABASE_URL=postgres://grafana:ZDI5MGE3YmYyMTRlNGNmYThkMTYyZjk3@postgres:5432/${POSTGRES_DB}
-      - GF_SECURITY_ADMIN_PASSWORD=Admin@Heart360
+      - GF_DATABASE_URL=${GF_DATABASE_URL}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_PASSWORD}
 
   postgres:
     image: simpledotorg/heart360tk-postgresql:${HEART360TK_VERSION}
     container_name: postgres
-    ports:
-      - 5432:5432
     restart: unless-stopped
     volumes:
       - ./.database:/var/lib/postgresql/data
